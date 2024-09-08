@@ -54,7 +54,28 @@ void fsm_reply_hello_error(clientstate_t *state, dbproto_header_t *proto_header)
   write(state->fd, proto_header, sizeof(dbproto_header_t));
 }
 
-void handle_client_fsm(struct db_header_t *db_header, struct employee_t **employees, clientstate_t *state, int dbfd) {
+void fsm_reply_add(clientstate_t *state, dbproto_header_t *proto_header) {
+  proto_header->type = MSG_EMPLOYEE_ADD_RESP;
+  proto_header->length = 0;
+
+  proto_header->type = htonl(proto_header->type);
+  proto_header->length = htons(proto_header->length);
+
+  write(state->fd, proto_header, sizeof(dbproto_header_t));
+}
+
+void fsm_reply_add_error(clientstate_t *state, dbproto_header_t *proto_header) {
+  proto_header->type = MSG_ERROR;
+  proto_header->length = 0;
+
+  proto_header->type = htonl(proto_header->type);
+  proto_header->length = htons(proto_header->length);
+
+  write(state->fd, proto_header, sizeof(dbproto_header_t));
+}
+
+void handle_client_fsm(struct db_header_t *db_header,
+    struct employee_t **employees, clientstate_t *state, int dbfd) {
   dbproto_header_t *proto_header = (dbproto_header_t*) state->buffer;
 
   proto_header->type = ntohl(proto_header->type);
@@ -63,7 +84,8 @@ void handle_client_fsm(struct db_header_t *db_header, struct employee_t **employ
   if (state->state == STATE_HELLO) {
     if (proto_header->type != MSG_HELLO_REQ || proto_header->length != 1) {
       printf("Didn't get MSG_HELLO in HELLO state...\n");
-      // TODO: send error message
+      fsm_reply_hello_error(state, proto_header);
+      return;
     }
 
     dbproto_hello_req* hello_req = (dbproto_hello_req*) &proto_header[1]; // Stupid pointer magic again
@@ -71,13 +93,28 @@ void handle_client_fsm(struct db_header_t *db_header, struct employee_t **employ
     if (hello_req->proto != PROTO_VERSION) {
       printf("Protocol mismatch...\n");
       fsm_reply_hello_error(state, proto_header);
+      return;
     }
 
     fsm_reply_hello(state, proto_header);
     state->state = STATE_MSG;
     printf("Client upgraded to STATE_MSG\n");
-  }
-  if (state->state == STATE_MSG) {
+  } else if (state->state == STATE_MSG) {
+    if (proto_header->type == MSG_EMPLOYEE_ADD_REQ && proto_header->length == 1) {
+      printf("Processing MSG_EMPLOYEE_ADD_REQ\n");
 
+      dbproto_employee_add_req *employee_add_req =
+        (dbproto_employee_add_req *) &proto_header[1];
+
+      printf("Adding employee %s\n", employee_add_req->data);
+      if (add_employee(db_header, employees, employee_add_req->data) != STATUS_SUCCESS) {
+        printf("Failed to add employee\n");
+        fsm_reply_add_error(state, proto_header);
+        return;
+      } else {
+        fsm_reply_add(state, proto_header);
+        output_file(dbfd, db_header, *employees);
+      }
+    }
   }
 }

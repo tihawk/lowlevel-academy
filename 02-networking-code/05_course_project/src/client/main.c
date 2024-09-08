@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -16,7 +17,7 @@ int send_hello(int fd) {
   proto_header->type = MSG_HELLO_REQ;
   proto_header->length = 1;
   
-  dbproto_hello_req *hello_req = (dbproto_hello_req*)&proto_header[1]; // I still hate this
+  dbproto_hello_req *hello_req = (dbproto_hello_req*) &proto_header[1]; // I still hate this
   hello_req->proto = PROTO_VERSION;
 
   proto_header->type = htonl(proto_header->type);
@@ -38,6 +39,36 @@ int send_hello(int fd) {
   dbproto_hello_resp *hello_res = (dbproto_hello_resp*) &proto_header[1]; // And this is even worse
 
   printf("Server connected, protocol v%d\n", ntohs(hello_res->proto));
+  return STATUS_SUCCESS;
+}
+
+int send_employee(int fd, char *employee_str) {
+  char buf[BUFF_SIZE] = {0};
+
+  dbproto_header_t *proto_header = buf;
+  proto_header->type = MSG_EMPLOYEE_ADD_REQ;
+  proto_header->length = 1;
+
+  dbproto_employee_add_req *employee_add_req =
+    (dbproto_employee_add_req *) &proto_header[1];
+  strncpy(&employee_add_req->data, employee_str, sizeof(employee_add_req->data));
+
+  proto_header->type = htonl(proto_header->type);
+  proto_header->length = htons(proto_header->length);
+
+  write(fd, buf, sizeof(dbproto_header_t) + sizeof(dbproto_employee_add_req));
+
+  read(fd, buf, sizeof(buf));
+
+  proto_header->type = ntohl(proto_header->type);
+  proto_header->length = ntohs(proto_header->length);
+
+  if (proto_header->type == MSG_ERROR) {
+    printf("Improper format or data\n");
+    return STATUS_ERROR;
+  }
+
+  printf("Succesfully added employee\n");
   return STATUS_SUCCESS;
 }
 
@@ -98,6 +129,8 @@ int main(int argc, char *argv[]) {
     close(fd);
     return -1;
   }
+
+  send_employee(fd, add_arg);
 
   close(fd);
 }

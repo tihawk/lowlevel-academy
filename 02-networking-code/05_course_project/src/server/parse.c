@@ -104,14 +104,32 @@ int read_employees(int fd, struct db_header_t *header, struct employee_t **emplo
   return STATUS_SUCCESS;
 }
 
-int add_employee(struct db_header_t *header, struct employee_t *employees, char *addString) {
-  printf("%s\n", addString);
+int add_employee(struct db_header_t *header, struct employee_t **employees_ptr, char *addString) {
+  printf("Current employee entries: %d\n", header->count);
 
   char *name = strtok(addString, ",");
+  if (name == NULL) {
+    return STATUS_ERROR;
+  }
   char *address = strtok(NULL, ",");
+  if (address == NULL) {
+    return STATUS_ERROR;
+  }
   char *hours = strtok(NULL, ",");
+  if (hours == NULL || atoi(hours) == 0) {
+    return STATUS_ERROR;
+  }
+
+  header->count++;
+  *employees_ptr = realloc(*employees_ptr, header->count*sizeof(struct employee_t));
+  if (employees_ptr == NULL) {
+    printf("Realloc failed\n");
+    return STATUS_ERROR;
+  }
 
   printf("name: %s; address: %s; hours: %s;\n", name, address, hours);
+
+  struct employee_t *employees = *employees_ptr;
 
   strncpy(employees[header->count-1].name, name, sizeof(employees[header->count-1].name));
   strncpy(employees[header->count-1].address, address, sizeof(employees[header->count-1].address));
@@ -135,22 +153,28 @@ void output_file(int fd, struct db_header_t *header, struct employee_t *employee
     return;
   }
 
-  int hostCount = header->count;
-  int newFilesize = sizeof(struct db_header_t) + sizeof(struct employee_t)*hostCount;
+  int host_count = header->count;
+  int new_filesize = sizeof(struct db_header_t) + sizeof(struct employee_t)*host_count;
 
   header->version = htons(header->version);
   header->count = htons(header->count);
   header->magic = htonl(header->magic);
-  header->filesize = htonl(newFilesize);
+  header->filesize = htonl(new_filesize);
 
   lseek(fd, 0, SEEK_SET);
 
   write(fd, header, sizeof(struct db_header_t));
 
-  for (int i = 0; i < hostCount; i++) {
+  for (int i = 0; i < host_count; i++) {
     employees[i].hours = htonl(employees[i].hours);  
     write(fd, &employees[i], sizeof(struct employee_t));
+    employees[i].hours = ntohl(employees[i].hours);  
   }
+
+  header->version = ntohs(header->version);
+  header->count = ntohs(header->count);
+  header->magic = ntohl(header->magic);
+  header->filesize = ntohl(new_filesize);
 
   return;
 }

@@ -24,7 +24,8 @@ void print_usage(char *argv[]) {
   return;
 }
 
-void poll_loop(unsigned short port, struct db_header_t *dbheader, struct employee_t *employees, int dbfd) {
+void poll_loop(unsigned short port, struct db_header_t *dbheader,
+    struct employee_t *employees, int dbfd) {
   int listen_fd, connected_fd, free_slot;
   struct sockaddr_in server_address, client_address;
   socklen_t client_length = sizeof(client_address);
@@ -57,7 +58,8 @@ void poll_loop(unsigned short port, struct db_header_t *dbheader, struct employe
   server_address.sin_port = htons(port);
 
   // Bind
-  if (bind(listen_fd, (struct sockaddr*) &server_address, sizeof(struct sockaddr)) == -1) {
+  if (bind(listen_fd, (struct sockaddr*) &server_address,
+        sizeof(struct sockaddr)) == -1) {
     perror("bind");
     exit(EXIT_FAILURE);
   }
@@ -96,7 +98,8 @@ void poll_loop(unsigned short port, struct db_header_t *dbheader, struct employe
 
     // Check for new connections
     if (fds[0].revents & POLLIN) {
-      if ((connected_fd = accept (listen_fd, (struct sockaddr *) &client_address, &client_length)) == -1) {
+      if ((connected_fd = accept (listen_fd,
+              (struct sockaddr *) &client_address, &client_length)) == -1) {
         perror("accept");
         continue;
       }
@@ -126,7 +129,8 @@ void poll_loop(unsigned short port, struct db_header_t *dbheader, struct employe
         int slot = find_slot_by_fd(client_states, fd);
 
         // Read
-        ssize_t bytes_read = read(client_states[slot].fd, &client_states[slot].buffer, BUFF_SIZE);
+        ssize_t bytes_read = read(client_states[slot].fd,
+            &client_states[slot].buffer, BUFF_SIZE);
         if (bytes_read <= 0) {
           close(fd);
           if (slot == -1) {
