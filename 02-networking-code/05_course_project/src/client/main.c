@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -72,16 +73,58 @@ int send_employee(int fd, char *employee_str) {
   return STATUS_SUCCESS;
 }
 
+int list_employees(int fd) {
+  char buf[BUFF_SIZE] = {0};
+
+  dbproto_header_t *proto_header = buf;
+  proto_header->type = MSG_EMPLOYEE_LIST_REQ;
+  proto_header->length = 0;
+
+  proto_header->type = htonl(proto_header->type);
+  proto_header->length = htons(proto_header->length);
+
+  write(fd, buf, sizeof(dbproto_header_t));
+
+  // Read only the header of the response, so we can later move the read pointer
+  // for each next employee on the list. This is clever.
+  read(fd, buf, sizeof(dbproto_header_t));
+
+  proto_header->type = ntohl(proto_header->type);
+  proto_header->length = ntohs(proto_header->length);
+
+  if (proto_header->type == MSG_ERROR
+      || proto_header->type != MSG_EMPLOYEE_LIST_RESP) {
+    printf("Unable to read employees");
+    return STATUS_ERROR;
+  }
+
+  dbproto_employee_list_resp *employee =
+    (dbproto_employee_list_resp*) &proto_header[1];
+
+  for (int i = 0; i < proto_header->length; i ++) {
+    // Read next employee from list 
+    read(fd, employee, sizeof(dbproto_employee_list_resp));
+    employee->hours = ntohl(employee->hours);
+    printf("Name: %s; Address: %s; Hours: %u;\n",
+        employee->name, employee->address, employee->hours);
+  }
+  return STATUS_SUCCESS;
+}
+
 int main(int argc, char *argv[]) {
   char *add_arg = NULL;
   char *port_arg = NULL;
   char *host_arg = NULL;
+  bool list_arg = false;
   int c;
   
   unsigned short port = 0;
 
-  while ((c = getopt(argc, argv, "p:h:a:")) != -1) {
+  while ((c = getopt(argc, argv, "p:h:a:l")) != -1) {
     switch (c) {
+      case 'l':
+        list_arg = true;
+        break;
       case 'a':
         add_arg = optarg;
         break;
@@ -130,7 +173,13 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  send_employee(fd, add_arg);
+  if (add_arg != NULL) {
+    send_employee(fd, add_arg);
+  }
+
+  if (list_arg) {
+    list_employees(fd);
+  }
 
   close(fd);
 }

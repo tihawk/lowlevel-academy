@@ -2,6 +2,7 @@
 #include "../../include/common.h"
 #include <netinet/in.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 void init_clients(clientstate_t* states) {
@@ -74,6 +75,30 @@ void fsm_reply_add_error(clientstate_t *state, dbproto_header_t *proto_header) {
   write(state->fd, proto_header, sizeof(dbproto_header_t));
 }
 
+void fsm_reply_list(struct db_header_t *db_header, struct employee_t **employees_ptr,
+    clientstate_t *state) {
+  dbproto_header_t *proto_header = (dbproto_header_t *) &state->buffer;
+  proto_header->type = htonl(MSG_EMPLOYEE_LIST_RESP);
+  proto_header->length = htons(db_header->count);
+
+  write(state->fd, proto_header, sizeof(dbproto_header_t));
+
+  // We will overwrite the same pointed object in the loop, immediately sending
+  // it to the client, and so we don't need
+  // to allocate memory or move the pointer in the buffer for each of the employees
+  dbproto_employee_list_resp *employee_resp =
+    (dbproto_employee_list_resp *) &proto_header[1];
+
+  struct employee_t *employees = *employees_ptr;
+
+  for (int i = 0; i < db_header->count; i++) {
+    strncpy(employee_resp->name, employees[i].name, sizeof(employee_resp->name));
+    strncpy(employee_resp->address, employees[i].address, sizeof(employee_resp->address));
+    employee_resp->hours = htonl(employees[i].hours);
+    write(state->fd, employee_resp, sizeof(dbproto_employee_list_resp));
+  }
+}
+
 void handle_client_fsm(struct db_header_t *db_header,
     struct employee_t **employees, clientstate_t *state, int dbfd) {
   dbproto_header_t *proto_header = (dbproto_header_t*) state->buffer;
@@ -115,6 +140,9 @@ void handle_client_fsm(struct db_header_t *db_header,
         fsm_reply_add(state, proto_header);
         output_file(dbfd, db_header, *employees);
       }
+    } else if (proto_header->type == MSG_EMPLOYEE_LIST_REQ) {
+      printf("Sending a list of employees\n");
+      fsm_reply_list(db_header, employees, state);
     }
   }
 }

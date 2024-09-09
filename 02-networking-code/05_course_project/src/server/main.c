@@ -158,9 +158,7 @@ void poll_loop(unsigned short port, struct db_header_t *dbheader,
 int main (int argc, char *argv[]) {
   
   char *port_arg = NULL;
-  char *add_string_arg = NULL;
   char *filepath_arg = NULL;
-  bool list_arg = false;
   bool newfile_arg = false;
   int c;
 
@@ -172,7 +170,7 @@ int main (int argc, char *argv[]) {
   struct db_header_t *header = NULL;
   struct employee_t *employees = NULL; // Apparently it doesn't matter that it's an array of employees
 
-  while ((c = getopt(argc, argv, "nf:a:lp:")) != -1) {
+  while ((c = getopt(argc, argv, "nf:p:")) != -1) {
     switch (c) {
       case 'n':
         newfile_arg = true;
@@ -180,18 +178,12 @@ int main (int argc, char *argv[]) {
       case 'f':
         filepath_arg = optarg;
         break;
-      case 'l':
-        list_arg = true;
-        break;
       case 'p':
         port_arg = optarg;
         port = atoi(port_arg);
         if (port == 0) {
           printf("Bad port: %s\n", port_arg);
         }
-        break;
-      case 'a':
-        add_string_arg = optarg;
         break;
       case '?':
         printf("Unknown option -%c\n", c);
@@ -242,22 +234,9 @@ int main (int argc, char *argv[]) {
     printf("Failed to read employees\n");
   }
 
-  if (add_string_arg) {
-    header->count++;
-    if (realloc(employees, header->count*sizeof(struct employee_t)) == NULL) {
-      printf("Realloc failed\n");
-      return -1;
-    }
-    add_employee(header, employees, add_string_arg);
-  }
-
-  if (list_arg) {
-    list_employees(header, employees);
-  }
-
   poll_loop(port, header, employees, dbfd);
 
-  output_file(dbfd, header, employees);
+//  output_file(dbfd, header, employees);
 
   return 0;
 }
